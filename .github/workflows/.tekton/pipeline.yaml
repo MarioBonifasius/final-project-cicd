@@ -1,0 +1,78 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: final-project-pipeline
+spec:
+  description: "CI/CD Pipeline untuk Final Project - Cleanup, Clone, Lint, Test, Build, Deploy"
+  
+  workspaces:
+    - name: shared-workspace
+    
+  params:
+    - name: repo-url
+      type: string
+      description: URL repository GitHub
+      default: "https://github.com/MarioBonifasius/final-project-cicd.git"
+    - name: branch-name
+      type: string
+      description: Nama branch
+      default: "main"
+  
+  tasks:
+    # TASK 1: CLEANUP
+    - name: cleanup
+      taskRef:
+        name: cleanup-task
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+    
+    # TASK 2: GIT CLONE
+    - name: git-clone
+      taskRef:
+        name: git-clone-task
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.branch-name)
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+      runAfter: [cleanup]
+    
+    # TASK 3: LINTING (flake8 untuk Python)
+    - name: flake8-lint
+      taskRef:
+        name: flake8-task
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+      runAfter: [git-clone]
+    
+    # TASK 4: TESTING (nose untuk Python)
+    - name: nose-test
+      taskRef:
+        name: nose-task
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+      runAfter: [flake8-lint]
+    
+    # TASK 5: BUILD (buildah)
+    - name: buildah-build
+      taskRef:
+        name: buildah-task
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+      runAfter: [nose-test]
+    
+    # TASK 6: DEPLOY (OpenShift Client)
+    - name: deploy
+      taskRef:
+        name: openshift-client-task
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+      runAfter: [buildah-build]
